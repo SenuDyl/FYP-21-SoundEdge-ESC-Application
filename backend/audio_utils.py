@@ -1,35 +1,30 @@
+import io
 import torch
 import torch.nn as nn
 import torchaudio
+import soundfile as sf
 
-torchaudio.set_audio_backend("sox_io")
+# =========================
+# Config (match training)
+# =========================
+TARGET_SR = 44100
+N_FFT = 1024
+HOP_LENGTH = 256
+N_MELS = 40
 
-# Load audio
-def load_audio(file_path: str, sr: int = 44100) -> torch.Tensor:
-    waveform, orig_sr = torchaudio.load(file_path)
-    if orig_sr != sr:
-        waveform = torchaudio.transforms.Resample(orig_freq=orig_sr, new_freq=sr)(waveform)
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-    return waveform  # [1, time]
+# Set this to what you used in training (common: 5.0 sec)
+DURATION_SEC = 5.0
+NUM_SAMPLES = int(TARGET_SR * DURATION_SEC)
 
-# Trim or pad waveform to fixed length
-def trim_or_pad_waveform(waveform, num_samples):
-    current_length = waveform.shape[1]
-    if current_length < num_samples:
-        pad_size = num_samples - current_length
-        waveform = torch.nn.functional.pad(waveform, (0, pad_size))
-    else:
-        waveform = waveform[:, :num_samples]
-    return waveform
 
-# Mel-spectrogram transformation with normalization
+# =========================
+# Normalization (your code)
+# =========================
 class NormalizeMinus1To1(nn.Module):
     """Min-max normalize each example to [-1, 1]."""
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Works for [*, F, T] or [*, T]
         dims = list(range(x.dim()))
-        # compute per-example min/max (keep channel/freq/time jointly)
         # If batch exists, reduce over all but batch dim
         if x.dim() >= 2:
             reduce_dims = tuple(dims[1:])
@@ -41,12 +36,12 @@ class NormalizeMinus1To1(nn.Module):
         x = (x - x_min) / (x_max - x_min + 1e-6)
         return (x * 2.0) - 1.0
 
-# Mel-spectrogram transformation pipeline
+
 def mel_transform(
-    sample_rate: int = 44100,
-    n_fft: int = 1024,
-    hop_length: int = 256,
-    n_mels: int = 40,
+    sample_rate: int = TARGET_SR,
+    n_fft: int = N_FFT,
+    hop_length: int = HOP_LENGTH,
+    n_mels: int = N_MELS,
 ) -> nn.Sequential:
     return nn.Sequential(
         torchaudio.transforms.MelSpectrogram(
@@ -59,11 +54,40 @@ def mel_transform(
         NormalizeMinus1To1(),
     )
 
-# Full preprocessing for a single audio file
-def preprocess_audio(file_path: str, sr: int = 44100, duration: float = 5.0) -> torch.Tensor:
-    waveform = load_audio(file_path, sr)
-    waveform = trim_or_pad_waveform(waveform, int(sr * duration))
-    mel_module = mel_transform()
-    log_mel = mel_module(waveform)  # [channel, n_mels, time]
-    log_mel = log_mel.unsqueeze(0)  # Add batch dim: [1, channel, n_mels, time]
-    return log_mel
+
+_MEL_PIPELINE = mel_transform()
+
+
+# =========================
+# Helpers
+# =========================
+def trim_or_pad(waveform: torch.Tensor, num_samples: int) -> torch.Tensor:
+    """
+    waveform: [1, T]
+    returns:  [1, num_samples]
+    """
+    T = waveform.shape[1]
+    if T < num_samples:
+        waveform = torch.nn.functional.pad(waveform, (0, num_samples - T))
+    else:
+        waveform = waveform[:, :num_samples]
+    return waveform
+
+
+def waveform_to_model_input(audio_bytes: bytes) -> torch.Tensor:
+    # Load audio with soundfile (works well for .wav)
+    data, sr = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=True)  # [T, C]
+    data = data.mean(axis=1)  # mono -> [T]
+    print(f"Original SR: {sr}, shape: {data.shape}")
+    wav = torch.from_numpy(data).unsqueeze(0)  # [1, T]
+    print(f"Waveform shape: {wav.shape}")
+    # Resample to training sample rate
+    if sr != TARGET_SR:
+        wav = torchaudio.functional.resample(wav, sr, TARGET_SR)
+
+    # Fixed duration
+    wav = trim_or_pad(wav, NUM_SAMPLES)
+
+    mel = _MEL_PIPELINE(wav)    # [1, 40, T_frames]
+    x = mel.unsqueeze(0)        # [1, 1, 40, T_frames]
+    return x
