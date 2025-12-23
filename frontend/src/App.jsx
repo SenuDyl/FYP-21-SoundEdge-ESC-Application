@@ -53,6 +53,12 @@ export default function App() {
     setErr("");
   }
 
+  function playSegment(segment) {
+    const audio = new Audio(`data:audio/wav;base64,${segment.audio_base64}`);
+    audio.currentTime = 0;
+    audio.play();
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
@@ -131,16 +137,88 @@ export default function App() {
               </div>
             )}
 
-            {result.explanation_png_base64 && (
+            {result.spectrogram && (
               <div style={{ marginTop: 14 }}>
                 <div style={styles.muted}>Explanation</div>
                 <img
                   alt="Grad-CAM explanation"
-                  src={`data:image/png;base64,${result.explanation_png_base64}`}
+                  src={result.spectrogram}
                   style={styles.img}
                 />
               </div>
             )}
+            {result.gradcam_heatmap && (
+              <div style={{ marginTop: 14 }}>
+                {/* <div style={styles.muted}>Explanation</div> */}
+                <img
+                  alt="Grad-CAM explanation"
+                  src={result.gradcam_heatmap}
+                  style={styles.img}
+                />
+              </div>
+            )}
+            {result.spectrogram_bboxes && (
+              <div style={{ marginTop: 14 }}>
+                {/* <div style={styles.muted}>Explanation</div> */}
+                <img
+                  alt="Grad-CAM explanation"
+                  src={result.spectrogram_bboxes}
+                  style={styles.img}
+                />
+              </div>
+            )}
+            {result.gradcam_heatmap_bboxes && (
+              <div style={{ marginTop: 14 }}>
+                {/* <div style={styles.muted}>Explanation</div> */}
+                <img
+                  alt="Grad-CAM explanation"
+                  src={result.gradcam_heatmap_bboxes}
+                  style={styles.img}
+                />
+              </div>
+            )}
+            {result.frequency_explanation && (
+              <div style={{ marginTop: 14 }}>
+                <div style={styles.muted}>Frequency Explanation</div>
+                <div style={{ padding: 10, borderRadius: 8, color: "#222", background: "#f0f0f0", marginTop: 6 }}>
+                  {result.frequency_explanation}
+                </div>
+              </div>
+            )}
+
+            {result.time_explanation && (
+              <div style={{ marginTop: 14 }}>
+                <div style={styles.muted}>
+                  Temporal Explanation
+                </div>
+                <div style={{ padding: 10, borderRadius: 8, color: "#222", background: "#f0f0f0", marginTop: 6 }}>
+                  Temporal characteristics: <b>{result.time_explanation.temporal_category}</b>
+                </div>
+
+                {Array.isArray(result.time_explanation.finalized_segments) &&
+                  result.time_explanation.finalized_segments.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ color: "#333", lineHeight: 1.6 }}>
+                        The model focused on sound events between:
+                        <ul style={{ marginTop: 4, paddingLeft: 20 }}>
+                          {result.time_explanation.finalized_segments.map((seg, idx) => (
+                            <li key={idx}>
+                              {`Segment ${seg.segment_index}: ${seg.start_sec.toFixed(2)} – ${seg.end_sec.toFixed(2)} s`}
+                              <button
+                                onClick={() => playSegment(seg)}
+                                style={{ marginLeft: 8, ...styles.smallBtn }}
+                              >
+                                ▶ Play
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
           </div>
         )}
 

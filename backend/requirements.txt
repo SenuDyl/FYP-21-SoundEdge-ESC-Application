@@ -4,3 +4,8 @@ torch
 torchaudio
 python-multipart
 numpy
+soundfile
+matplotlib 
+Pillow 
+opencv-python
+librosa
