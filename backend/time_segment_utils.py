@@ -61,7 +61,7 @@ def extract_audio_segment(
 
     return y[start_sample:end_sample]
 
-def merge_close_time_segments(segments, gap_threshold=1.0):
+def merge_close_time_segments(segments, gap_threshold=0.5):
     """
     Merge time segments that are close together.
 
@@ -175,7 +175,7 @@ def generate_explained_audio_segments(
 
     merged_segments = merge_close_time_segments(
         segments,
-        gap_threshold=1.0
+        gap_threshold=0.5
     )
 
     temporal_category = classify_temporal_pattern(segments, merged_segments, total_audio_duration)

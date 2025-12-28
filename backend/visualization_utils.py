@@ -25,20 +25,19 @@ def save_gradcam(spectrogram, grad_cam, file_name, ax=None):
     ax.set_xlabel("Time Frames")
     ax.set_ylabel("Mel Frequency Bins")
 
-    # ax.invert_yaxis()
-
-    ax.set_ylim(0, spectrogram.shape[0]-2)  # Manually set y-axis limits (adjust as needed)
+    ax.set_ylim(0, spectrogram.shape[0]-2)  # Manually set y-axis limits
 
     plt.colorbar(ax.imshow(grad_cam_resized, cmap='jet', origin='lower', alpha=0.6, aspect='auto'), ax=ax)
     
     # plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
     # plt.close()
+
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
     buf.seek(0)
     
-    return buf.getvalue()  # raw PNG bytes
+    return buf.getvalue() 
 
 
 def plot_spectrogram(spectrogram, file_name, ax=None):
@@ -66,7 +65,7 @@ def plot_spectrogram(spectrogram, file_name, ax=None):
     plt.close(fig)
     buf.seek(0)
     
-    return buf.getvalue()  # raw PNG bytes
+    return buf.getvalue() 
 
 def overlay_gradcam_on_spectrogram(spectrogram, grad_cam, file_name, ax=None):
     """Overlay the Grad-CAM heatmap on the log-mel spectrogram with more distinction."""
@@ -79,7 +78,7 @@ def overlay_gradcam_on_spectrogram(spectrogram, grad_cam, file_name, ax=None):
     # Resize the Grad-CAM to match spectrogram dimensions
     grad_cam_resized = cv2.resize(grad_cam, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
     
-    # Overlay the heatmap on the spectrogram (change color map to 'inferno' or 'hot' for better contrast)
+    # Overlay the heatmap on the spectrogram
     ax.imshow(spectrogram, cmap='jet', aspect='auto')  # Spectrogram on the bottom
 
     ax.imshow(grad_cam_resized, cmap='jet', alpha=0.3, aspect='auto')  # Grad-CAM on top
@@ -94,59 +93,6 @@ def overlay_gradcam_on_spectrogram(spectrogram, grad_cam, file_name, ax=None):
     
     plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
     plt.close()
-
-# def draw_bounding_box_on_heatmap(spectrogram, grad_cam, file_name, ax=None, threshold=0.7, padding=10):
-#     """Draw bounding boxes on GradCAM heatmaps with more distinction."""
-#     if ax is None:
-#         fig, ax = plt.subplots(figsize=(10, 6))
-    
-#     # Normalize Grad-CAM image
-#     grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())  # Normalize to [0, 1]
-    
-#     # Resize the Grad-CAM to match spectrogram dimensions
-#     grad_cam_resized = cv2.resize(grad_cam, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-    
-#     # Threshold the Grad-CAM image to create a binary mask
-#     _, thresh = cv2.threshold(grad_cam_resized, threshold, 1, cv2.THRESH_BINARY)
-
-#     # Find contours in the thresholded image
-#     contours, _ = cv2.findContours(thresh.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-#     # Draw bounding boxes around high-attention regions
-#     for contour in contours:
-#         # Get the bounding box coordinates for each contour
-#         x, y, w, h = cv2.boundingRect(contour)
-        
-#         # Add padding to the bounding box
-#         x -= padding  # Reduce the left side of the box
-#         y -= padding  # Reduce the top side of the box
-#         w += 2 * padding  # Increase the width of the box
-#         h += 2 * padding  # Increase the height of the box
-        
-#         # Ensure the coordinates are within the image bounds
-#         x = max(x, 0)
-#         y = max(y, 0.5)
-#         w = min(w, spectrogram.shape[1] - x)
-
-#         h = min(h, spectrogram.shape[0] - y - 2.5)  # Ensure the height with padding does not go beyond the bottom edge
-#         print(f"Bounding box before adjustment: x={x}, y={y}, w={w}, h={h}")
-
-#         # Draw the bounding box on the spectrogram
-#         ax.add_patch(plt.Rectangle((x, y), w, h, linewidth=2, edgecolor='red', facecolor='none'))
-
-#     ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6, aspect='auto')  # Grad-CAM on top
-    
-#     # Add axes labels
-#     ax.set_xlabel("Time Frames")
-#     ax.set_ylabel("Mel Frequency Bins")
-
-#     ax.set_ylim(0, spectrogram.shape[0]-2) 
-
-#     # Optional: Add a color bar for Grad-CAM
-#     plt.colorbar(ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6, aspect='auto'), ax=ax)
-    
-#     plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
-#     plt.close()
 
 def compute_iou(box1, box2):
     x1, y1, w1, h1 = box1
@@ -167,7 +113,6 @@ def compute_iou(box1, box2):
 
     return inter_area / union_area
 
-
 def suppress_overlapping_boxes(boxes, iou_threshold=0.3):
     # Sort by area (largest first)
     boxes = sorted(boxes, key=lambda b: b[2] * b[3], reverse=True)
@@ -184,7 +129,6 @@ def suppress_overlapping_boxes(boxes, iou_threshold=0.3):
             kept.append(box)
 
     return kept
-
 
 # --- Remove nested bounding boxes ---
 def remove_nested_boxes(boxes):
@@ -214,7 +158,7 @@ def remove_nested_boxes(boxes):
     return kept
 
 def merge_close_boxes(boxes, time_gap_thresh=20):
-    boxes = sorted(boxes, key=lambda b: b[0])  # sort by x (time)
+    boxes = sorted(boxes, key=lambda b: b[0]) 
     merged = []
 
     for box in boxes:
@@ -289,7 +233,7 @@ def draw_bounding_box_on_heatmap(
         # Clamp to image bounds
         x = max(1, x)
         y = max(0.5, y)
-        w = min(w, W - x - 1)
+        w = min(w, W - x - 2.5)
         h = min(h, H - y - 2.5)
 
         boxes.append((x, y, w, h))
@@ -371,7 +315,7 @@ def draw_bounding_box_on_spectrogram(spectrogram, grad_cam, file_name, ax=None, 
         # Clamp to image bounds
         x = max(1, x)
         y = max(0.5, y)
-        w = min(w, W - x - 1)
+        w = min(w, W - x - 2.5)
         h = min(h, H - y - 2.5)
 
         boxes.append((x, y, w, h))

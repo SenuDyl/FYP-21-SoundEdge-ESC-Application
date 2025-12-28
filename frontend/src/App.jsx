@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+// import ReactTooltip from "react-tooltip";
 
 const BACKEND_URL = "http://localhost:8000";
 
@@ -67,10 +68,10 @@ export default function App() {
       : [];
 
   const images = [
-    result?.spectrogram ? { title: "Mel Spectrogram", src: result.spectrogram } : null,
-    result?.gradcam_heatmap ? { title: "Grad-CAM Heatmap", src: result.gradcam_heatmap } : null,
-    result?.spectrogram_bboxes ? { title: "Mel Spectrogram + BBoxes", src: result.spectrogram_bboxes } : null,
-    result?.gradcam_heatmap_bboxes ? { title: "Grad-CAM Heatmap + BBoxes", src: result.gradcam_heatmap_bboxes } : null,
+    result?.spectrogram ? { title: "Mel Spectrogram", src: result.spectrogram, subtitle: "Time–frequency representation of the input audio signal" } : null,
+    result?.gradcam_heatmap ? { title: "Grad-CAM Heatmap", src: result.gradcam_heatmap, subtitle: "Visualization of regions where the model focuses most" } : null,
+    result?.spectrogram_bboxes ? { title: "Mel Spectrogram with Bounding Boxes", src: result.spectrogram_bboxes, subtitle: "Visualization of the spectrogram with annotated regions of interest" } : null,
+    result?.gradcam_heatmap_bboxes ? { title: "Grad-CAM Heatmap with Bounding Boxes", src: result.gradcam_heatmap_bboxes, subtitle: "Focused areas overlaid using bounding boxes for better understanding" } : null,
   ].filter(Boolean);
 
   return (
@@ -79,8 +80,8 @@ export default function App() {
       <aside className="left">
         <div className="leftInner">
           <div className="card">
-            <div className="headerTitle">ESC-10 Sound Classifier</div>
-            <div className="headerSub">CNN-PSK + XAI outputs</div>
+            <div className="headerTitle">Environmental Sound Classifier</div>
+            <div className="headerSub">Using CNN-PSK Model and Explainable AI (XAI) for Enhanced Audio Recognition</div>
           </div>
 
           <div className="card">
@@ -234,7 +235,8 @@ export default function App() {
                 {images.map((img, i) => (
                   <div key={i} className="card">
                     <div className="imageTitle">{img.title}</div>
-                    <img alt={img.title} src={img.src} className="img" />
+                    <div className="imageSubtitle">{img.subtitle}</div>
+                    <img alt={img.title} src={img.src} className="img"/>
                   </div>
                 ))}
               </div>

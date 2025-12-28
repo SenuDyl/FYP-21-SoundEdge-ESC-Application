@@ -57,12 +57,6 @@ def frames_to_seconds(segments, hop_length, sample_rate):
         end_t = end_f * hop_length / sample_rate
         time_segments.append((round(start_t, 2), round(end_t, 2)))
 
-    # time_segments.append({
-    #         "start_sec": round(start_t, 2),
-    #         "end_sec": round(end_t, 2),
-    #         "duration_sec": round(end_t - start_t, 2)
-    #     })
-
     print("[DEBUG] Time segments (sec):", time_segments)
 
     return time_segments
