@@ -1,98 +1,64 @@
 import base64
 import io
-import matplotlib.pyplot as plt
-import numpy as np
-import cv2
 import os
 
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 
-def save_gradcam(spectrogram, grad_cam, file_name, ax=None):
-    """Overlay the Grad-CAM heatmap on the log-mel spectrogram with more distinction."""
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Normalize Grad-CAM image
-    grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())  # Normalize to [0, 1]
-    
-    # Resize the Grad-CAM to match spectrogram dimensions
-    grad_cam_resized = cv2.resize(grad_cam, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-    
-    ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6)
 
-    # Add axes labels
-    ax.set_xlabel("Time Frames")
-    ax.set_ylabel("Mel Frequency Bins")
-
-    ax.set_ylim(0, spectrogram.shape[0]-2)  # Manually set y-axis limits
-
-    plt.colorbar(ax.imshow(grad_cam_resized, cmap='jet', origin='lower', alpha=0.6, aspect='auto'), ax=ax)
-    
-    # plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
-    # plt.close()
-
+def _save_fig_to_png_bytes(fig) -> bytes:
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.1)
     plt.close(fig)
     buf.seek(0)
-    
-    return buf.getvalue() 
+    return buf.getvalue()
 
 
-def plot_spectrogram(spectrogram, file_name, ax=None):
-    """Plot the log-mel spectrogram with axes labeled."""
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-    # Display the spectrogram
-    ax.imshow(spectrogram, cmap='jet', aspect='equal')
-    
-    # Label the axes
+def plot_spectrogram(spectrogram: np.ndarray) -> bytes:
+    """
+    spectrogram: np.ndarray [F, T]
+    returns: PNG bytes
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    im = ax.imshow(spectrogram, cmap="jet", aspect="auto")
     ax.set_xlabel("Time Frames")
     ax.set_ylabel("Mel Frequency Bins")
+    ax.set_ylim(0, spectrogram.shape[0] - 2)
+    plt.colorbar(im, ax=ax)
+    return _save_fig_to_png_bytes(fig)
 
-    ax.set_ylim(0, spectrogram.shape[0]-2)
 
-    # Show the color bar for reference
-    plt.colorbar(ax.imshow(spectrogram, cmap='jet', aspect='auto'), ax=ax)
-    # plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
-    # plt.close()
-
-    # Save figure to bytes buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-    buf.seek(0)
-    
-    return buf.getvalue() 
-
-def overlay_gradcam_on_spectrogram(spectrogram, grad_cam, file_name, ax=None):
-    """Overlay the Grad-CAM heatmap on the log-mel spectrogram with more distinction."""
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Normalize Grad-CAM image
-    grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())  # Normalize to [0, 1]
-    
-    # Resize the Grad-CAM to match spectrogram dimensions
-    grad_cam_resized = cv2.resize(grad_cam, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-    
-    # Overlay the heatmap on the spectrogram
-    ax.imshow(spectrogram, cmap='jet', aspect='auto')  # Spectrogram on the bottom
-
-    ax.imshow(grad_cam_resized, cmap='jet', alpha=0.3, aspect='auto')  # Grad-CAM on top
-    
-    # Add axes labels
+def save_gradcam(spectrogram: np.ndarray, cam_resized: np.ndarray) -> bytes:
+    """
+    cam_resized: np.ndarray [F, T] already normalized to [0,1] and already resized to spectrogram shape
+    returns: PNG bytes
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    im = ax.imshow(cam_resized, cmap="jet", alpha=0.6, aspect="auto")
     ax.set_xlabel("Time Frames")
     ax.set_ylabel("Mel Frequency Bins")
+    ax.set_ylim(0, spectrogram.shape[0] - 2)
+    plt.colorbar(im, ax=ax)
+    return _save_fig_to_png_bytes(fig)
 
-    ax.set_ylim(0, spectrogram.shape[0]-2) 
 
-    plt.colorbar(ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6, aspect='auto'), ax=ax)
-    
-    plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
-    plt.close()
+def overlay_gradcam_on_spectrogram(spectrogram: np.ndarray, cam_resized: np.ndarray) -> bytes:
+    """
+    cam_resized: np.ndarray [F, T] already normalized and resized
+    returns: PNG bytes
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.imshow(spectrogram, cmap="jet", aspect="auto")
+    im = ax.imshow(cam_resized, cmap="jet", alpha=0.3, aspect="auto")
+    ax.set_xlabel("Time Frames")
+    ax.set_ylabel("Mel Frequency Bins")
+    ax.set_ylim(0, spectrogram.shape[0] - 2)
+    plt.colorbar(im, ax=ax)
+    return _save_fig_to_png_bytes(fig)
 
-def compute_iou(box1, box2):
+
+def compute_iou(box1, box2) -> float:
     x1, y1, w1, h1 = box1
     x2, y2, w2, h2 = box2
 
@@ -111,52 +77,37 @@ def compute_iou(box1, box2):
 
     return inter_area / union_area
 
+
 def suppress_overlapping_boxes(boxes, iou_threshold=0.3):
-    # Sort by area (largest first)
     boxes = sorted(boxes, key=lambda b: b[2] * b[3], reverse=True)
     kept = []
-
     for box in boxes:
-        overlap = False
-        for k in kept:
-            if compute_iou(box, k) > iou_threshold:
-                overlap = True
-                break
-
-        if not overlap:
+        if all(compute_iou(box, k) <= iou_threshold for k in kept):
             kept.append(box)
-
     return kept
 
-# --- Remove nested bounding boxes ---
+
 def remove_nested_boxes(boxes):
-    # Sort largest → smallest
     boxes = sorted(boxes, key=lambda b: b[2] * b[3], reverse=True)
     kept = []
-
     for box in boxes:
         x, y, w, h = box
         x2, y2 = x + w, y + h
 
         inside = False
-        for k in kept:
-            kx, ky, kw, kh = k
+        for kx, ky, kw, kh in kept:
             kx2, ky2 = kx + kw, ky + kh
-
-            if (
-                x >= kx and y >= ky and
-                x2 <= kx2 and y2 <= ky2
-            ):
+            if x >= kx and y >= ky and x2 <= kx2 and y2 <= ky2:
                 inside = True
                 break
 
         if not inside:
             kept.append(box)
-
     return kept
 
+
 def merge_close_boxes(boxes, time_gap_thresh=20):
-    boxes = sorted(boxes, key=lambda b: b[0]) 
+    boxes = sorted(boxes, key=lambda b: b[0])
     merged = []
 
     for box in boxes:
@@ -167,7 +118,6 @@ def merge_close_boxes(boxes, time_gap_thresh=20):
         x, y, w, h = box
         mx, my, mw, mh = merged[-1]
 
-        # if close in time
         if x <= mx + mw + time_gap_thresh:
             new_x = mx
             new_y = min(my, y)
@@ -180,67 +130,73 @@ def merge_close_boxes(boxes, time_gap_thresh=20):
     return merged
 
 
-def draw_bounding_box_on_heatmap(
-    spectrogram,
-    grad_cam,
-    file_name,
-    ax=None,
-    threshold=0.7,
-    padding=10
+def _extract_boxes_from_cam(
+    cam_resized: np.ndarray,
+    threshold: float,
+    padding: int,
 ):
-    """Draw bounding boxes on Grad-CAM heatmaps and remove nested boxes."""
+    """
+    cam_resized: np.ndarray [F, T] normalized 0..1
+    Returns list of (x, y, w, h) in image coordinates (x=time, y=freq)
+    """
+    # Threshold in [0,1] directly (no renorm, no resize)
+    _, thresh = cv2.threshold(cam_resized.astype(np.float32), threshold, 1, cv2.THRESH_BINARY)
 
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-    # --- Normalize Grad-CAM ---
-    grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min() + 1e-8)
-
-    # --- Resize Grad-CAM to spectrogram size ---
-    grad_cam_resized = cv2.resize(
-        grad_cam,
-        (spectrogram.shape[1], spectrogram.shape[0]),
-        interpolation=cv2.INTER_CUBIC
-    )
-
-    # --- Threshold Grad-CAM ---
-    _, thresh = cv2.threshold(
-        grad_cam_resized, threshold, 1, cv2.THRESH_BINARY
-    )
-
-    # --- Find contours ---
     contours, _ = cv2.findContours(
         thresh.astype(np.uint8),
         cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
+        cv2.CHAIN_APPROX_SIMPLE,
     )
 
-    # --- Collect bounding boxes ---
     boxes = []
-    H, W = spectrogram.shape[:2]
+    H, W = cam_resized.shape[:2]
 
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
 
-        # Padding
+        # padding
         x -= padding
         y -= padding
         w += 2 * padding
         h += 2 * padding
 
-        # Clamp to image bounds
-        x = max(1, x)
-        y = max(0.5, y)
-        w = min(w, W - x - 2.5)
-        h = min(h, H - y - 2.5)
+        # clamp to bounds
+        x = max(0, x)
+        y = max(0, y)
+        w = min(w, W - x)
+        h = min(h, H - y)
 
-        boxes.append((x, y, w, h))
-    
+        # skip degenerate boxes
+        if w > 1 and h > 1:
+            boxes.append((x, y, w, h))
+
     boxes = remove_nested_boxes(boxes)
     boxes = suppress_overlapping_boxes(boxes, iou_threshold=0.3)
     boxes = merge_close_boxes(boxes, time_gap_thresh=20)
+    return boxes
 
-    # --- Draw bounding boxes ---
+
+def draw_bounding_box_on_heatmap(
+    spectrogram: np.ndarray,
+    cam_resized: np.ndarray,
+    threshold: float = 0.7,
+    padding: int = 10,
+) -> bytes:
+    """
+    Draw bboxes extracted from cam_resized ON TOP of a heatmap render.
+
+    cam_resized must already be:
+      - same shape as spectrogram [F, T]
+      - normalized to [0,1]
+    """
+    boxes = _extract_boxes_from_cam(cam_resized, threshold, padding)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # heatmap
+    im = ax.imshow(cam_resized, cmap="jet", alpha=0.6, aspect="auto")
+
+    # boxes
     for x, y, w, h in boxes:
         ax.add_patch(
             plt.Rectangle(
@@ -249,80 +205,38 @@ def draw_bounding_box_on_heatmap(
                 h,
                 linewidth=2,
                 edgecolor="red",
-                facecolor="none"
+                facecolor="none",
             )
         )
-
-    # --- Overlay Grad-CAM ---
-    ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6, aspect='auto')
 
     ax.set_xlabel("Time Frames")
     ax.set_ylabel("Mel Frequency Bins")
     ax.set_ylim(0, spectrogram.shape[0] - 2)
-
-    plt.colorbar(ax.imshow(grad_cam_resized, cmap='jet', alpha=0.6, aspect='auto'), ax=ax)
-
-    # plt.savefig(file_name, bbox_inches="tight", pad_inches=0.1)
-    # plt.close()
-        # Save figure to bytes buffer
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-    buf.seek(0)
-    
-    return buf.getvalue()  # raw PNG bytes
+    plt.colorbar(im, ax=ax)
+    return _save_fig_to_png_bytes(fig)
 
 
-def draw_bounding_box_on_spectrogram(spectrogram, grad_cam, file_name, ax=None, threshold=0.7, padding=10):
-    """Draw bounding boxes on the spectrogram based on GradCAM heatmap."""
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Normalize Grad-CAM image
-    grad_cam = (grad_cam - grad_cam.min()) / (grad_cam.max() - grad_cam.min())  # Normalize to [0, 1]
-    
-    # Resize the Grad-CAM to match spectrogram dimensions
-    grad_cam_resized = cv2.resize(grad_cam, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-    
-   # --- Threshold Grad-CAM ---
-    _, thresh = cv2.threshold(
-        grad_cam_resized, threshold, 1, cv2.THRESH_BINARY
-    )
+def draw_bounding_box_on_spectrogram(
+    spectrogram: np.ndarray,
+    cam_resized: np.ndarray,
+    threshold: float = 0.7,
+    padding: int = 10,
+) -> bytes:
+    """
+    Draw bboxes extracted from cam_resized ON TOP of the spectrogram.
 
-    # --- Find contours ---
-    contours, _ = cv2.findContours(
-        thresh.astype(np.uint8),
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
+    cam_resized must already be:
+      - same shape as spectrogram [F, T]
+      - normalized to [0,1]
+    """
+    boxes = _extract_boxes_from_cam(cam_resized, threshold, padding)
 
-    # --- Collect bounding boxes ---
-    boxes = []
-    H, W = spectrogram.shape[:2]
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
+    # spectrogram
+    im = ax.imshow(spectrogram, cmap="jet", aspect="auto")
 
-        # Padding
-        x -= padding
-        y -= padding
-        w += 2 * padding
-        h += 2 * padding
-
-        # Clamp to image bounds
-        x = max(1, x)
-        y = max(0.5, y)
-        w = min(w, W - x - 2.5)
-        h = min(h, H - y - 2.5)
-
-        boxes.append((x, y, w, h))
-    
-    boxes = remove_nested_boxes(boxes)
-    boxes = suppress_overlapping_boxes(boxes, iou_threshold=0.3)
-    boxes = merge_close_boxes(boxes, time_gap_thresh=20)
-
-    # --- Draw bounding boxes ---
+    # boxes
     for x, y, w, h in boxes:
         ax.add_patch(
             plt.Rectangle(
@@ -331,55 +245,48 @@ def draw_bounding_box_on_spectrogram(spectrogram, grad_cam, file_name, ax=None, 
                 h,
                 linewidth=2,
                 edgecolor="red",
-                facecolor="none"
+                facecolor="none",
             )
         )
 
-    ax.imshow(spectrogram, cmap='jet', aspect='auto')  # Spectrogram on the bottom
-
-    # Add axes labels
     ax.set_xlabel("Time Frames")
     ax.set_ylabel("Mel Frequency Bins")
+    ax.set_ylim(0, spectrogram.shape[0] - 2)
+    plt.colorbar(im, ax=ax)
+    return _save_fig_to_png_bytes(fig)
 
-    ax.set_ylim(0, spectrogram.shape[0]-2) 
 
-    plt.colorbar(ax.imshow(spectrogram, cmap='jet', alpha=0.6, aspect='auto'), ax=ax)
-
-    # Save the figure with the spectrogram and bounding boxes
-    # plt.savefig(file_name, bbox_inches='tight', pad_inches=0.1)
-    # plt.close()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-    buf.seek(0)
-    
-    return buf.getvalue()  # raw PNG bytes
-
-def generate_and_save_images(spectrogram, cam_resized, file_prefix):
+def generate_and_save_images(spectrogram: np.ndarray, cam_resized: np.ndarray, file_prefix: str):
     """
     spectrogram: np.ndarray [F, T]
-    cam_resized: np.ndarray [F, T] already normalized 0..1
-    """
+    cam_resized: np.ndarray [F, T] normalized 0..1
 
+    Returns:
+      encoded_spec, encoded_heatmap, encoded_spec_bb, encoded_heatmap_bb
+    """
     output_folder = f"visualizations/{file_prefix}_outputs"
     os.makedirs(output_folder, exist_ok=True)
 
-    spectrogram_filename = os.path.join(output_folder, f"{file_prefix}_spectrogram.png")
-    spec_image_bytes = plot_spectrogram(spectrogram, spectrogram_filename)
-    encoded_spec = base64.b64encode(spec_image_bytes).decode("utf-8")
+    # Spectrogram
+    spec_png = plot_spectrogram(spectrogram)
+    encoded_spec = base64.b64encode(spec_png).decode("utf-8")
 
-    normal_gradcam_filename = os.path.join(output_folder, f"{file_prefix}_gradcam.png")
-    heatmap_image_bytes = save_gradcam(spectrogram, cam_resized, normal_gradcam_filename)
-    encoded_heatmap = base64.b64encode(heatmap_image_bytes).decode("utf-8")
+    # Heatmap only
+    heat_png = save_gradcam(spectrogram, cam_resized)
+    encoded_heatmap = base64.b64encode(heat_png).decode("utf-8")
 
-    spec_with_bboxes_filename = os.path.join(output_folder, f"{file_prefix}_spec_with_bboxes.png")
-    spec_bb_image = draw_bounding_box_on_spectrogram(spectrogram, cam_resized, spec_with_bboxes_filename)
-    encoded_spec_bb = base64.b64encode(spec_bb_image).decode("utf-8")
+    # Spectrogram + boxes
+    spec_bb_png = draw_bounding_box_on_spectrogram(spectrogram, cam_resized)
+    encoded_spec_bb = base64.b64encode(spec_bb_png).decode("utf-8")
 
-    gradcam_with_bboxes_filename = os.path.join(output_folder, f"{file_prefix}_gradcam_with_bboxes.png")
-    heatmap_bb_image = draw_bounding_box_on_heatmap(spectrogram, cam_resized, gradcam_with_bboxes_filename)
-    encoded_heatmap_bb = base64.b64encode(heatmap_bb_image).decode("utf-8")
+    # Heatmap + boxes
+    heat_bb_png = draw_bounding_box_on_heatmap(spectrogram, cam_resized)
+    encoded_heatmap_bb = base64.b64encode(heat_bb_png).decode("utf-8")
+
+    # Optional: save to disk (commented out since you mostly return base64)
+    # with open(os.path.join(output_folder, f"{file_prefix}_spectrogram.png"), "wb") as f: f.write(spec_png)
+    # with open(os.path.join(output_folder, f"{file_prefix}_gradcam.png"), "wb") as f: f.write(heat_png)
+    # with open(os.path.join(output_folder, f"{file_prefix}_spec_with_bboxes.png"), "wb") as f: f.write(spec_bb_png)
+    # with open(os.path.join(output_folder, f"{file_prefix}_gradcam_with_bboxes.png"), "wb") as f: f.write(heat_bb_png)
 
     return encoded_spec, encoded_heatmap, encoded_spec_bb, encoded_heatmap_bb
-
- 

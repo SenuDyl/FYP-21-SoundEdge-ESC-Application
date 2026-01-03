@@ -5,18 +5,19 @@ import json
 import os
 
 from utils.explainability_shared import compute_explainability_tensors
-from model.CNN_PSK import CNN_PCAw_SSRPMS_KAN
-from model.GradCAM import GradCAM
 from utils.visualization import generate_and_save_images
 from utils.freq_explainability import generate_and_save_frequency_explanation
 from utils.time_explainability import generate_and_save_time_explanation
+from utils.config import TARGET_SR, HOP_LENGTH
+from model.CNN_PSK import CNN_PCAw_SSRPMS_KAN
+from model.GradCAM import GradCAM
 
 app = FastAPI()
 
 # Allow your frontend to call backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,34 +58,31 @@ async def predict(file: UploadFile = File(...)):
         audio_bytes = await file.read()
         file_name = f"{file.filename}"
 
-        # Compute ONCE
-        spectrogram, cam_resized, probs, idx, conf = compute_explainability_tensors(audio_bytes, grad_cam)
+        explain_output = compute_explainability_tensors(audio_bytes, grad_cam)
 
-        # Reuse everywhere
         spec_encoded, heatmap_encoded, spec_bb_encoded, heatmap_bb_encoded = generate_and_save_images(
-            spectrogram=spectrogram,
-            cam_resized=cam_resized,
+            spectrogram=explain_output.spectrogram,
+            cam_resized=explain_output.cam_resized,
             file_prefix=file_name
         )
 
         freq_explanation = generate_and_save_frequency_explanation(
-            class_name=LABELS[idx],
+            class_name=LABELS[explain_output.idx],
             audio_file_name=file_name,
-            cam_resized=cam_resized
+            cam_resized=explain_output.cam_resized
         )
 
         time_segments, json_output = generate_and_save_time_explanation(
             audio_bytes=audio_bytes,
             audio_file_name=file_name,
-            cam_resized=cam_resized,
-            hop_length=256,
-            sample_rate=44100,
-            threshold=0.6
+            cam_resized=explain_output.cam_resized,
+            hop_length=HOP_LENGTH,
+            sample_rate=TARGET_SR,
         )
 
         return {
-            "label": LABELS[idx],
-            "confidence": conf,
+            "label": LABELS[explain_output.idx],
+            "confidence": explain_output.conf,
             "spectrogram": f"data:image/png;base64,{spec_encoded}",
             "gradcam_heatmap": f"data:image/png;base64,{heatmap_encoded}",
             "spectrogram_bboxes": f"data:image/png;base64,{spec_bb_encoded}",

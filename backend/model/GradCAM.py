@@ -18,6 +18,8 @@ class GradCAM:
         self.gradients = grad_out[0].detach()
 
     def __call__(self, x, class_idx=None):
+        self.model.zero_grad(set_to_none=True)
+
         with torch.enable_grad():
             logits = self.model(x)
 
@@ -25,12 +27,10 @@ class GradCAM:
             class_idx = int(torch.argmax(logits, dim=1).item())
 
         score = logits[:, class_idx].sum()
-        self.model.zero_grad(set_to_none=True)
         score.backward()
 
-        # activations: [B, C, H, W], gradients: [B, C, H, W]
-        w = self.gradients.mean(dim=(2,3), keepdim=True)   # [B, C, 1, 1]
-        cam = (w * self.activations).sum(dim=1, keepdim=True)  # [B, 1, H, W]
+        w = self.gradients.mean(dim=(2, 3), keepdim=True)
+        cam = (w * self.activations).sum(dim=1, keepdim=True)
         cam = F.relu(cam)
 
         cam = cam - cam.min()

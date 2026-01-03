@@ -4,16 +4,8 @@ import torch.nn as nn
 import torchaudio
 import soundfile as sf
 
-# =========================
-# Config (match training)
-# =========================
-TARGET_SR = 44100
-N_FFT = 1024
-HOP_LENGTH = 256
-N_MELS = 40
+from .config import TARGET_SR, N_MELS, HOP_LENGTH, N_FFT, DURATION_SEC
 
-# Set this to what you used in training (common: 5.0 sec)
-DURATION_SEC = 5.0
 NUM_SAMPLES = int(TARGET_SR * DURATION_SEC)
 
 
