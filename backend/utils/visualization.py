@@ -1,12 +1,10 @@
 import base64
 import io
-import torchaudio
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import os
 
-from audio_utils import waveform_to_model_input
 
 def save_gradcam(spectrogram, grad_cam, file_name, ax=None):
     """Overlay the Grad-CAM heatmap on the log-mel spectrogram with more distinction."""
@@ -357,45 +355,31 @@ def draw_bounding_box_on_spectrogram(spectrogram, grad_cam, file_name, ax=None, 
     
     return buf.getvalue()  # raw PNG bytes
 
-
-def generate_and_save_images(audio_bytes, model, grad_cam, target_layer, file_prefix):
-    """Generate the spectrogram with Grad-CAM overlay and attention regions."""
+def generate_and_save_images(spectrogram, cam_resized, file_prefix):
+    """
+    spectrogram: np.ndarray [F, T]
+    cam_resized: np.ndarray [F, T] already normalized 0..1
+    """
 
     output_folder = f"visualizations/{file_prefix}_outputs"
     os.makedirs(output_folder, exist_ok=True)
 
-    # Convert waveform to model input
-    x = waveform_to_model_input(audio_bytes)
-    
-    # Get Grad-CAM heatmap
-    cam, _ = grad_cam(x)
-    grad_cam_image = cam.squeeze().cpu().numpy()
-    
-    # Get the log-mel spectrogram (for visualization)
-    spectrogram = x.squeeze().cpu().numpy()
-    print(f"Spectrogram shape: {spectrogram.shape}")  # Should be [num_mel_bins, num_time_steps]
-
     spectrogram_filename = os.path.join(output_folder, f"{file_prefix}_spectrogram.png")
-    spec_image_bytes = plot_spectrogram( spectrogram, spectrogram_filename)
-    encoded_spec = base64.b64encode(spec_image_bytes).decode('utf-8')       
-    
+    spec_image_bytes = plot_spectrogram(spectrogram, spectrogram_filename)
+    encoded_spec = base64.b64encode(spec_image_bytes).decode("utf-8")
+
     normal_gradcam_filename = os.path.join(output_folder, f"{file_prefix}_gradcam.png")
-    heatmap_image_bytes = save_gradcam(spectrogram, grad_cam_image, normal_gradcam_filename)
-    encoded_heatmap = base64.b64encode(heatmap_image_bytes).decode('utf-8')
+    heatmap_image_bytes = save_gradcam(spectrogram, cam_resized, normal_gradcam_filename)
+    encoded_heatmap = base64.b64encode(heatmap_image_bytes).decode("utf-8")
 
-    # Overlay Grad-CAM on the spectrogram
-    gradcam_overlay_filename = os.path.join(output_folder, f"{file_prefix}_gradcam_overlay.png")
-    overlay_gradcam_on_spectrogram(spectrogram, grad_cam_image, gradcam_overlay_filename)
-
-    # Draw bounding boxes on spectrograms for high-attention regions
     spec_with_bboxes_filename = os.path.join(output_folder, f"{file_prefix}_spec_with_bboxes.png")
-    spec_bb_image = draw_bounding_box_on_spectrogram(spectrogram, grad_cam_image, spec_with_bboxes_filename)
-    encoded_spec_bb = base64.b64encode(spec_bb_image).decode('utf-8')
+    spec_bb_image = draw_bounding_box_on_spectrogram(spectrogram, cam_resized, spec_with_bboxes_filename)
+    encoded_spec_bb = base64.b64encode(spec_bb_image).decode("utf-8")
 
-    # Draw bounding boxes on heatmaps for high-attention regions
     gradcam_with_bboxes_filename = os.path.join(output_folder, f"{file_prefix}_gradcam_with_bboxes.png")
-    heatmap_bb_image = draw_bounding_box_on_heatmap(spectrogram, grad_cam_image, gradcam_with_bboxes_filename)
-    encoded_heatmap_bb = base64.b64encode(heatmap_bb_image).decode('utf-8')
+    heatmap_bb_image = draw_bounding_box_on_heatmap(spectrogram, cam_resized, gradcam_with_bboxes_filename)
+    encoded_heatmap_bb = base64.b64encode(heatmap_bb_image).decode("utf-8")
 
     return encoded_spec, encoded_heatmap, encoded_spec_bb, encoded_heatmap_bb
+
  

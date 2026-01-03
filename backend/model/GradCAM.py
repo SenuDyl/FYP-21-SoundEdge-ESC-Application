@@ -25,6 +25,7 @@ class GradCAM:
             class_idx = int(torch.argmax(logits, dim=1).item())
 
         score = logits[:, class_idx].sum()
+        self.model.zero_grad(set_to_none=True)
         score.backward()
 
         # activations: [B, C, H, W], gradients: [B, C, H, W]

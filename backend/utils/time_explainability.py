@@ -1,10 +1,7 @@
-import numpy as np
 import os
-import cv2
 import json
 
-from visualization_utils import waveform_to_model_input
-from time_segment_utils import generate_explained_audio_segments
+from .time_segment import generate_explained_audio_segments
 
 def compute_time_importance(cam_resized):
     """
@@ -88,50 +85,24 @@ def save_time_insight_json(
     
 
 def generate_and_save_time_explanation(
-    grad_cam,
+    audio_bytes,
     audio_file_name,
+    cam_resized,
     hop_length,
     sample_rate,
-    audio_bytes,
     threshold=0.6
 ):
-    x = waveform_to_model_input(audio_bytes)
-    spectrogram = x.squeeze().cpu().numpy()
-    
-    # Get Grad-CAM heatmap
-    cam, _ = grad_cam(x)
-    cam_np = cam.squeeze(0).squeeze(0).cpu().numpy()
-
-    cam_np = (cam_np - cam_np.min()) / (cam_np.max() + 1e-8)
-
-    cam_resized = cv2.resize(cam_np, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-
-    print("Heatmap shape before resizing:", cam_np.shape)
-    print("Heatmap shape after resizing:", cam_resized.shape)
-
     time_importance = compute_time_importance(cam_resized)
 
-    frame_segments = extract_time_segments(
-        time_importance,
-        threshold=threshold
-    )
+    frame_segments = extract_time_segments(time_importance, threshold=threshold)
 
-    time_segments = frames_to_seconds(
-        frame_segments,
-        hop_length,
-        sample_rate
-    )
+    time_segments = frames_to_seconds(frame_segments, hop_length, sample_rate)
 
-    json_path = save_time_insight_json(
-        audio_file_name,
-        time_segments,
-        threshold
-    )
+    json_path = save_time_insight_json(audio_file_name, time_segments, threshold)
 
     json_output = generate_explained_audio_segments(
         audio_bytes=audio_bytes,
         time_json_path=json_path
     )
-
 
     return time_segments, json_output

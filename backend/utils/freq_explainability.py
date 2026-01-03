@@ -1,8 +1,6 @@
 import numpy as np
 import os
-import cv2
 
-from visualization_utils import waveform_to_model_input
 
 def top_k_mean(array, k=3):
     """
@@ -141,7 +139,8 @@ def generate_frequency_explanation(class_name, dominant_band, energies, freq_cat
 
 
 def save_frequency_feedback(audio_file_name, explanation, output_root="frequency_feedback"):
-
+    # create output directory if it doesn't exist
+    os.makedirs(output_root, exist_ok=True)
     # Extract file name without extension
     base_name = os.path.splitext(os.path.basename(audio_file_name))[0]
 
@@ -151,41 +150,16 @@ def save_frequency_feedback(audio_file_name, explanation, output_root="frequency
         f.write(explanation)
 
     print(f"[INFO] Frequency feedback saved to: {file_path}")
-    
 
-def generate_and_save_frequency_explanation(grad_cam, class_name, audio_file_name, audio_bytes):
+def generate_and_save_frequency_explanation(class_name, audio_file_name, cam_resized):
     """
-    Generate frequency explanation from Grad-CAM and save to file.
-
-    Args:
-        grad_cam (np.ndarray): Grad-CAM heatmap of shape [mel_bins, time_frames]
-
+    cam_resized: np.ndarray [F, T] normalized 0..1
     """
-
-    x = waveform_to_model_input(audio_bytes)
-    spectrogram = x.squeeze().cpu().numpy()
-    
-    # Get Grad-CAM heatmap
-    cam, _ = grad_cam(x)
-    cam_np = cam.squeeze(0).squeeze(0).cpu().numpy()
-
-    cam_np = (cam_np - cam_np.min()) / (cam_np.max() + 1e-8)
-
-    cam_resized = cv2.resize(cam_np, (spectrogram.shape[1], spectrogram.shape[0]), interpolation=cv2.INTER_CUBIC)
-
-    print("Heatmap shape before resizing:", cam_np.shape)
-    print("Heatmap shape after resizing:", cam_resized.shape)
-
-    dominant_band, energies, freq_importance  = generate_stats(cam_resized)
+    dominant_band, energies, freq_importance = generate_stats(cam_resized)
     freq_category = classify_frequency_category_soft(freq_importance, energies)
-    print(f"Audio: {audio_file_name}, Frequency category: {freq_category}, Energies: {energies}")
 
-    # Generate explanation
-    explanation = generate_frequency_explanation(class_name, dominant_band, energies, freq_category, freq_importance)
+    explanation = generate_frequency_explanation(
+        class_name, dominant_band, energies, freq_category, freq_importance
+    )
     save_frequency_feedback(audio_file_name, explanation)
-
     return explanation
-
-
-
-
