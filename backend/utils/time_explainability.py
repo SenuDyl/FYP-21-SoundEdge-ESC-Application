@@ -3,32 +3,18 @@ import json
 
 from .time_segment import generate_explained_audio_segments
 
+
 def compute_time_importance(cam_resized):
-    """
-    cam_resized: np.ndarray of shape [mel_bins, time_frames]
-    """
-    # Average over frequency → importance per time frame
-    time_importance = cam_resized.mean(axis=0)  # [time_frames]
-
-    # Normalize
+    time_importance = cam_resized.mean(axis=0)
     time_importance = time_importance / (time_importance.max() + 1e-8)
-    
-    print("Time importance stats - min:", time_importance.min(), "max:", time_importance.max(), "mean:", time_importance.mean())
-
     return time_importance
 
-def extract_time_segments(
-    time_importance,
-    threshold=0.6,
-    min_frames=5
-):
-    """
-    Returns list of (start_frame, end_frame)
-    """
+
+def extract_time_segments(time_importance, threshold=0.6, min_frames=5):
     active = time_importance >= threshold
     segments = []
-
     start = None
+
     for i, is_active in enumerate(active):
         if is_active and start is None:
             start = i
@@ -37,37 +23,27 @@ def extract_time_segments(
                 segments.append((start, i - 1))
             start = None
 
-    # Handle trailing segment
     if start is not None and len(active) - start >= min_frames:
         segments.append((start, len(active) - 1))
 
     return segments
 
-def frames_to_seconds(segments, hop_length, sample_rate):
-    """
-    Convert frame indices to time in seconds
-    """
-    time_segments = []
 
+def frames_to_seconds(segments, hop_length, sample_rate):
+    time_segments = []
     for start_f, end_f in segments:
         start_t = start_f * hop_length / sample_rate
         end_t = end_f * hop_length / sample_rate
         time_segments.append((round(start_t, 2), round(end_t, 2)))
-
-    print("[DEBUG] Time segments (sec):", time_segments)
-
     return time_segments
 
-def save_time_insight_json(
-    audio_file_name,
-    time_segments,
-    threshold,
-    output_root="time_insights"
-):
-    os.makedirs(output_root, exist_ok=True)
+
+def save_time_insight_json(audio_file_name, time_segments, threshold, output_dir):
+    time_dir = os.path.join(output_dir, "time")
+    os.makedirs(time_dir, exist_ok=True)
 
     base_name = os.path.splitext(os.path.basename(audio_file_name))[0]
-    json_path = os.path.join(output_root, f"{base_name}_time_insight.json")
+    json_path = os.path.join(time_dir, f"{base_name}_time_insight.json")
 
     data = {
         "audio_file": audio_file_name,
@@ -77,12 +53,11 @@ def save_time_insight_json(
         }
     }
 
-    with open(json_path, "w") as f:
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-    print(f"[INFO] Time insight saved → {json_path}")
     return json_path
-    
+
 
 def generate_and_save_time_explanation(
     audio_bytes,
@@ -90,19 +65,19 @@ def generate_and_save_time_explanation(
     cam_resized,
     hop_length,
     sample_rate,
+    output_dir,
     threshold=0.6
 ):
     time_importance = compute_time_importance(cam_resized)
-
     frame_segments = extract_time_segments(time_importance, threshold=threshold)
-
     time_segments = frames_to_seconds(frame_segments, hop_length, sample_rate)
 
-    json_path = save_time_insight_json(audio_file_name, time_segments, threshold)
+    time_json_path = save_time_insight_json(audio_file_name, time_segments, threshold, output_dir)
 
-    json_output = generate_explained_audio_segments(
+    json_output, segments_json_path = generate_explained_audio_segments(
         audio_bytes=audio_bytes,
-        time_json_path=json_path
+        time_json_path=time_json_path,
+        output_dir=output_dir,
     )
 
-    return time_segments, json_output
+    return time_segments, json_output, time_json_path, segments_json_path
