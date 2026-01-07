@@ -1,4 +1,3 @@
-# utils/explainability_shared.py (small but important fixes)
 import cv2
 import numpy as np
 import torch
@@ -7,7 +6,6 @@ from .audio_transform import waveform_to_model_input
 from .types import ExplainOutput
 
 def compute_explainability_tensors(audio_bytes, grad_cam):
-    # Ensure x is on the same device as the model
     device = next(grad_cam.model.parameters()).device
     x = waveform_to_model_input(audio_bytes).to(device)
 
@@ -26,7 +24,6 @@ def compute_explainability_tensors(audio_bytes, grad_cam):
         interpolation=cv2.INTER_CUBIC,
     )
 
-    # cam_resized is now guaranteed [F, T] in [0,1]
     return ExplainOutput(
         spectrogram=spectrogram,
         cam_resized=cam_resized,

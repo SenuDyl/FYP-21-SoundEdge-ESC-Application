@@ -42,10 +42,6 @@ def mel_transform(
 
 _MEL_PIPELINE = mel_transform()
 
-
-# =========================
-# Helpers
-# =========================
 def trim_or_pad(waveform: torch.Tensor, num_samples: int) -> torch.Tensor:
     """
     waveform: [1, T]
