@@ -36,13 +36,10 @@ def generate_stats(cam_resized, top_k=3, sum_weight=0.7, peak_weight=0.3):
 
     energies = {"low": low_energy, "mid": mid_energy, "high": high_energy}
 
-    # Identify dominant band
-    dominant_band = max(energies, key=energies.get)
-
-    return dominant_band, energies, freq_importance
+    return energies, freq_importance
 
 
-def classify_frequency_category_soft(freq_importance, energies):
+def classify_frequency_category_soft(energies):
     """
     Improved classification with soft thresholds and top-2 band logic.
     """
@@ -79,7 +76,7 @@ def classify_frequency_category_soft(freq_importance, energies):
     return category
 
 
-def generate_frequency_explanation(class_name, dominant_band, energies, freq_category, freq_importance, top_k=5):
+def generate_frequency_explanation(class_name, freq_category, freq_importance, top_k=5):
     """
     Generate a human-readable frequency explanation for a sound clip.
     Combines category info with actual top-k frequency peaks for better insight.
@@ -155,11 +152,11 @@ def generate_and_save_frequency_explanation(class_name, audio_file_name, cam_res
     """
     cam_resized: np.ndarray [F, T] normalized 0..1
     """
-    dominant_band, energies, freq_importance = generate_stats(cam_resized)
-    freq_category = classify_frequency_category_soft(freq_importance, energies)
+    energies, freq_importance = generate_stats(cam_resized)
+    freq_category = classify_frequency_category_soft(energies)
 
     explanation = generate_frequency_explanation(
-        class_name, dominant_band, energies, freq_category, freq_importance
+        class_name, freq_category, freq_importance
     )
     save_frequency_feedback(audio_file_name, explanation)
     return explanation
