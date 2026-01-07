@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-// import ReactTooltip from "react-tooltip";
+import { useEffect, useMemo, useState } from "react";
+
 
 const BACKEND_URL = "http://localhost:8000";
 
@@ -10,6 +10,29 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [result, setResult] = useState(null);
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  useEffect(() => {
+    async function loadModels() {
+      setModelsLoading(true);
+      try {
+        const res = await fetch(`${BACKEND_URL}/models`);
+        if (!res.ok) throw new Error("Failed to load models.");
+        const data = await res.json();
+        const list = Array.isArray(data.models) ? data.models : [];
+        setModels(list);
+        if (list.length > 0) setSelectedModel(list[0]);
+      } catch (e) {
+        setErr(e?.message || "Failed to load models.");
+      } finally {
+        setModelsLoading(false);
+      }
+    }
+    loadModels();
+  }, []);
+
 
   const audioUrl = useMemo(() => {
     if (!file) return null;
@@ -27,11 +50,18 @@ export default function App() {
 
     setLoading(true);
     try {
+      if (!selectedModel) {
+        setErr("Please select a model.");
+        return;
+      }
+
       const form = new FormData();
       form.append("file", file);
+      form.append("model_name", selectedModel);
+
 
       const res = await fetch(
-        `${BACKEND_URL}/predict?explain=${explain ? "true" : "false"}`,
+        `${BACKEND_URL}/predict`,
         { method: "POST", body: form }
       );
 
@@ -86,6 +116,23 @@ export default function App() {
 
           <div className="card">
             <div className="sectionTitle">Input</div>
+              <div style={{ marginTop: 10, marginBottom: 10 }}>
+                <div className="muted" style={{ marginBottom: 6 }}>Model</div>
+                <select
+                  className="select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={modelsLoading || models.length === 0 || loading}
+                >
+                  {models.length === 0 ? (
+                    <option value="">{modelsLoading ? "Loading models..." : "No models found"}</option>
+                  ) : (
+                    models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))
+                  )}
+                </select>
+              </div>
 
             <div className="row">
               <input

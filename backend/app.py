@@ -1,11 +1,12 @@
 # ---------------------------app.py---------------------------
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 import torch
 import json
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 
 from utils.explainability_shared import compute_explainability_tensors
 from utils.visualization import generate_and_save_images
@@ -30,17 +31,44 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 with open("./class_labels/ESC10.json", "r") as f:
     LABELS = json.load(f)
 
-model = CNN_PCAw_SSRPMS_KAN(num_classes=len(LABELS))
-model.load_state_dict(torch.load("./model/checkpoints/best_2025-12-22.pth", map_location=DEVICE))
-
-target_layer = model.conv3[0]
-grad_cam = GradCAM(model, target_layer)
-
-model.to(DEVICE)
-model.eval()
-
 RESULTS_ROOT = "results"
+CHECKPOINTS_DIR = Path("./available_models/clean")
+
 os.makedirs(RESULTS_ROOT, exist_ok=True)
+
+MODEL_CACHE = {}  # model_name -> (model, grad_cam)
+
+def _resolve_checkpoint(model_name: str) -> Path:
+    if not model_name:
+        raise HTTPException(status_code=400, detail="Invalid model name.")
+    model_name += ".pth"
+    ckpt = (CHECKPOINTS_DIR / model_name).resolve()
+    base = CHECKPOINTS_DIR.resolve()
+
+    # prevent path traversal
+    if base not in ckpt.parents or not ckpt.is_file():
+        raise HTTPException(status_code=404, detail="Model checkpoint not found.")
+
+    return ckpt
+
+def get_model_and_cam(model_name: str):
+    if model_name in MODEL_CACHE:
+        return MODEL_CACHE[model_name]
+
+    ckpt_path = _resolve_checkpoint(model_name)
+
+    m = CNN_PCAw_SSRPMS_KAN(num_classes=len(LABELS))
+    state = torch.load(str(ckpt_path), map_location=DEVICE)
+    m.load_state_dict(state)
+    m.to(DEVICE)
+    m.eval()
+
+    target_layer = m.conv3[0]
+    cam = GradCAM(m, target_layer)
+
+    MODEL_CACHE[model_name] = (m, cam)
+    return m, cam
+
 
 def _safe_name(name: str) -> str:
     # keep letters, numbers, dash, underscore, dot
@@ -52,12 +80,26 @@ def _safe_name(name: str) -> str:
 def health():
     return {"status": "ok", "device": DEVICE}
 
+@app.get("/models")
+def list_models():
+    """
+    Returns available model checkpoint filenames in ./model/checkpoints
+    """
+    if not CHECKPOINTS_DIR.exists():
+        return {"models": []}
+    models = sorted(
+        [p.stem for p in CHECKPOINTS_DIR.glob("*.pth") if p.is_file()],
+        key=lambda s: s.lower()
+    )
+    return {"models": models}
+
+
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(file: UploadFile = File(...), model_name: str = Form(...)):
     try:
         audio_bytes = await file.read()
         safe_file = _safe_name(file.filename)
-
+        model, grad_cam = get_model_and_cam(model_name)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         run_dir = os.path.join(RESULTS_ROOT, f"{timestamp}_{os.path.splitext(safe_file)[0]}")
         os.makedirs(run_dir, exist_ok=True)
