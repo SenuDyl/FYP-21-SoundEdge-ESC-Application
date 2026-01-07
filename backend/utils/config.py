@@ -3,3 +3,5 @@ HOP_LENGTH = 256
 N_FFT = 1024
 N_MELS = 40
 DURATION_SEC = 5.0
+
+STATS_JSON_PATH = "./datasets/stats/FSC22_fold1.json"

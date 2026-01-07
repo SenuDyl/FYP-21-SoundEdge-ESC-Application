@@ -3,30 +3,21 @@ import torch
 import torch.nn as nn
 import torchaudio
 import soundfile as sf
+import json
 
-from .config import TARGET_SR, N_MELS, HOP_LENGTH, N_FFT, DURATION_SEC
+from .config import TARGET_SR, N_MELS, HOP_LENGTH, N_FFT, DURATION_SEC, STATS_JSON_PATH
 
 NUM_SAMPLES = int(TARGET_SR * DURATION_SEC)
 
+class NormalizeMeanStd(nn.Module):
+    def __init__(self, mean: float, std: float, eps: float = 1e-6):
+        super().__init__()
+        self.register_buffer("mean", torch.tensor(mean).view(1, 1, 1))
+        self.register_buffer("std", torch.tensor(std).view(1, 1, 1))
+        self.eps = eps
 
-# =========================
-# Normalization (your code)
-# =========================
-class NormalizeMinus1To1(nn.Module):
-    """Min-max normalize each example to [-1, 1]."""
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Works for [*, F, T] or [*, T]
-        dims = list(range(x.dim()))
-        # If batch exists, reduce over all but batch dim
-        if x.dim() >= 2:
-            reduce_dims = tuple(dims[1:])
-        else:
-            reduce_dims = tuple(dims)
-
-        x_min = x.amin(dim=reduce_dims, keepdim=True)
-        x_max = x.amax(dim=reduce_dims, keepdim=True)
-        x = (x - x_min) / (x_max - x_min + 1e-6)
-        return (x * 2.0) - 1.0
+        return (x - self.mean) / (self.std + self.eps)
 
 
 def mel_transform(
@@ -35,6 +26,8 @@ def mel_transform(
     hop_length: int = HOP_LENGTH,
     n_mels: int = N_MELS,
 ) -> nn.Sequential:
+    with open(STATS_JSON_PATH, "r", encoding="utf-8") as f:
+        s = json.load(f)
     return nn.Sequential(
         torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
@@ -43,7 +36,7 @@ def mel_transform(
             n_mels=n_mels,
         ),
         torchaudio.transforms.AmplitudeToDB(),
-        NormalizeMinus1To1(),
+        NormalizeMeanStd(mean=s["mean"], std=s["std"]),
     )
 
 
@@ -70,13 +63,10 @@ def waveform_to_model_input(audio_bytes: bytes) -> torch.Tensor:
     # Load audio with soundfile (works well for .wav)
     data, sr = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=True)  # [T, C]
     data = data.mean(axis=1)  # mono -> [T]
-    print(f"Original SR: {sr}, shape: {data.shape}")
     wav = torch.from_numpy(data).unsqueeze(0)  # [1, T]
-    print(f"Waveform shape: {wav.shape}")
     # Resample to training sample rate
     if sr != TARGET_SR:
         wav = torchaudio.functional.resample(wav, sr, TARGET_SR)
-
     # Fixed duration
     wav = trim_or_pad(wav, NUM_SAMPLES)
 

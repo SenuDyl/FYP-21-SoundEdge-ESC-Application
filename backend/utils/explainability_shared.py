@@ -12,7 +12,6 @@ def compute_explainability_tensors(audio_bytes, grad_cam):
     x = waveform_to_model_input(audio_bytes).to(device)
 
     cam, logits = grad_cam(x)
-
     probs = torch.softmax(logits, dim=1)[0]
     idx = int(torch.argmax(probs).item())
     conf = float(probs[idx].item())

@@ -1,0 +1,18 @@
+{
+  "test_fold": 1,
+  "train_folds": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "sample_rate": 44100,
+  "n_fft": 1024,
+  "hop_length": 256,
+  "n_mels": 40,
+  "space": "mel_db",
+  "stat_type": "global_scalar_over_all_bins_and_frames",
+  "count": 53788800,
+  "mean": -16.931294823684865,
+  "std": 22.98382323824131
+}

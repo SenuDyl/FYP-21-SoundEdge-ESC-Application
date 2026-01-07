@@ -5,6 +5,9 @@ import torch
 import json
 import os
 import re
+from fastapi.responses import FileResponse
+from urllib.parse import quote
+
 from datetime import datetime
 from pathlib import Path
 
@@ -28,15 +31,33 @@ app.add_middleware(
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-with open("./class_labels/ESC10.json", "r") as f:
+with open("./datasets/labels/FSC22.json", "r") as f:
     LABELS = json.load(f)
 
 RESULTS_ROOT = "results"
 CHECKPOINTS_DIR = Path("./available_models/clean")
+SAMPLES_DIR = Path("./audio_samples/clean")
+ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
 os.makedirs(RESULTS_ROOT, exist_ok=True)
 
-MODEL_CACHE = {}  # model_name -> (model, grad_cam)
+MODEL_CACHE = {}
+
+def _resolve_sample(sample_name: str) -> Path:
+    if not sample_name:
+        raise HTTPException(status_code=400, detail="Invalid sample name.")
+
+    # block traversal
+    p = (SAMPLES_DIR / sample_name).resolve()
+    base = SAMPLES_DIR.resolve()
+
+    if base not in p.parents or not p.is_file():
+        raise HTTPException(status_code=404, detail="Sample not found.")
+
+    if p.suffix.lower() not in ALLOWED_AUDIO_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported audio format.")
+
+    return p
 
 def _resolve_checkpoint(model_name: str) -> Path:
     if not model_name:
@@ -51,7 +72,7 @@ def _resolve_checkpoint(model_name: str) -> Path:
 
     return ckpt
 
-def get_model_and_cam(model_name: str):
+def _get_model_and_cam(model_name: str):
     if model_name in MODEL_CACHE:
         return MODEL_CACHE[model_name]
 
@@ -80,6 +101,28 @@ def _safe_name(name: str) -> str:
 def health():
     return {"status": "ok", "device": DEVICE}
 
+@app.get("/samples")
+def list_samples():
+    if not SAMPLES_DIR.exists():
+        return {"samples": []}
+
+    samples = sorted(
+        [p.name for p in SAMPLES_DIR.iterdir() if p.is_file() and p.suffix.lower() in ALLOWED_AUDIO_EXTS],
+        key=lambda s: s.lower()
+    )
+    return {"samples": samples}
+
+@app.get("/samples/{sample_name}")
+def get_sample_audio(sample_name: str):
+    p = _resolve_sample(sample_name)
+    # FileResponse automatically sets headers and streams efficiently
+    return FileResponse(
+        path=str(p),
+        media_type="audio/*",
+        filename=p.name
+    )
+
+
 @app.get("/models")
 def list_models():
     """
@@ -95,11 +138,14 @@ def list_models():
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...), model_name: str = Form(...)):
+async def predict(sample_name: str = Form(...), model_name: str = Form(...)):
     try:
-        audio_bytes = await file.read()
-        safe_file = _safe_name(file.filename)
-        model, grad_cam = get_model_and_cam(model_name)
+        sample_path = _resolve_sample(sample_name)
+        audio_bytes = sample_path.read_bytes()
+        safe_file = _safe_name(sample_path.name)
+
+        model, grad_cam = _get_model_and_cam(model_name)
+
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         run_dir = os.path.join(RESULTS_ROOT, f"{timestamp}_{os.path.splitext(safe_file)[0]}")
         os.makedirs(run_dir, exist_ok=True)
@@ -139,6 +185,8 @@ async def predict(file: UploadFile = File(...), model_name: str = Form(...)):
             "frequency_explanation": freq_explanation,
             "time_explanation": json_output,
             "run_dir": run_dir,
+            "used_sample": sample_name,
+            "used_model": model_name,
             "saved_files": {
                 "pngs": saved_pngs,
                 "frequency_txt": freq_txt_path,
